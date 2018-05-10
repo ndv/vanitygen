@@ -1566,16 +1566,13 @@ int vg_ocl_gethash_init(vg_ocl_context_t *vocp)
 	return 1;
 }
 
-#define OCL_CHECK(result) {cl_int ret = result; \
-	if (ret!=CL_SUCCESS) { fprintf(stderr, "file: %s line: %d\n", __FILE__, __LINE__); vg_ocl_error(vocp, ret, NULL);}\
-	}
-
 int vg_ocl_prefix_rekey(vg_ocl_context_t *vocp)
 {
 	vg_context_t *vcp = vocp->base.vxc_vc;
 	unsigned char *ocl_targets_in;
 	uint32_t *ocl_found_out;
 	int i;
+	cl_int ret; cl_event ev;
 	
 	/* Set the found indicator for each slot to -1 */
 	for (i = 0; i < vocp->voc_nslots; i++) {
@@ -1616,12 +1613,20 @@ int vg_ocl_prefix_rekey(vg_ocl_context_t *vocp)
 
 		// fill_bitmap
 		size_t globalws[1] = {1024};
-		OCL_CHECK(clEnqueueNDRangeKernel(vocp->voc_oclcmdq,
+		ret = clEnqueueNDRangeKernel(vocp->voc_oclcmdq,
 				     vocp->voc_oclkernel[0][2],
 				     1,
 				     NULL, globalws, NULL,
 				     0, NULL,
-				     NULL));
+				     &ev);
+		if (ret!=CL_SUCCESS) { fprintf(stderr, "file: %s line: %d\n", __FILE__, __LINE__); vg_ocl_error(vocp, ret, NULL);}
+
+		ret = clWaitForEvents(1, &ev);
+		clReleaseEvent(ev);
+		if (ret != CL_SUCCESS) {
+			vg_ocl_error(vocp, ret, "clWaitForEvents(NDRange,2)");
+			return 0;
+		}
 
 		vocp->voc_pattern_rewrite = 0;
 	}
