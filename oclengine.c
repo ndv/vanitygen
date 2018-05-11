@@ -2063,37 +2063,30 @@ vg_opencl_loop(vg_exec_context_t *arg)
 		
 		vocp->voc_rekey_func(vocp);
 
-		if(iter>0){
-			if (vcp->vc_verbose > 1) printf("\nMove the row increments forward");
-			for (i = 0; i < ncols; i++) {
-				EC_POINT_add(pgroup,
-					     ppbase[i],
-					     ppbase[i],
-					     poffset,
-					     vxcp->vxc_bnctx);
-			}
-
-			for (i = 0; i < ncols; i++) {
-				if (EC_POINT_is_at_infinity(pgroup, ppbase[i])) {
-					printf("Infinity at %d\n", i);
-					goto out;
-				}
-				int ret = EC_POINT_is_on_curve(pgroup, ppbase[i], vxcp->vxc_bnctx);
-				if (!ret) {
-					printf("Not on curve at %d: ret=%d\n", i, ret);
-					goto out;
-				}
-			}
-			EC_POINTs_make_affine(pgroup, ncols, ppbase, vxcp->vxc_bnctx);
-
-			if (vcp->vc_verbose > 1) printf("\nCopy %d sequential points to the device", ncols);
-			for (i = 0; i < ncols; i++)
-				vg_ocl_put_point_tpa(ocl_points_in, i, ppbase[i]);
-			vg_ocl_write_arg_buffer(vocp, 0, A_ROW, ocl_points_in);
-		}
-
 		if (!vg_ocl_kernel_start(vocp, 0, ncols, nrows, vocp->voc_ocl_invsize))
 			halt = 1;
+
+		if (vcp->vc_verbose > 1) printf("\nMove the row increments forward");
+		for (i = 0; i < ncols; i++) {
+			EC_POINT_add(pgroup,
+				     ppbase[i],
+				     ppbase[i],
+				     poffset,
+				     vxcp->vxc_bnctx);
+		}
+
+		for (i = 0; i < ncols; i++) {
+			if (EC_POINT_is_at_infinity(pgroup, ppbase[i])) {
+				printf("Infinity at %d\n", i);
+				goto out;
+			}
+		}
+		EC_POINTs_make_affine(pgroup, ncols, ppbase, vxcp->vxc_bnctx);
+
+		if (vcp->vc_verbose > 1) printf("\nCopy %d sequential points to the device", ncols);
+		for (i = 0; i < ncols; i++)
+			vg_ocl_put_point_tpa(ocl_points_in, i, ppbase[i]);
+		vg_ocl_write_arg_buffer(vocp, 0, A_ROW, ocl_points_in);
 
 		// Wait for the GPU to complete its job
 		if (vcp->vc_verbose > 1) printf("\nWait for the GPU to complete its job");
