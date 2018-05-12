@@ -2003,8 +2003,6 @@ vg_opencl_loop(vg_exec_context_t *arg)
 	vg_set_privkey(&vxcp->vxc_bntmp2, pkey);
 	EC_POINT_copy(ppbase[0], EC_KEY_get0_public_key(pkey));
 
-	vocp->voc_rekey_func(vocp);
-
 	/* Build the base array of sequential points */
 	for (i = 1; i < ncols; i++) {
 		EC_POINT_add(pgroup,
@@ -2013,20 +2011,19 @@ vg_opencl_loop(vg_exec_context_t *arg)
 			     pgen, vxcp->vxc_bnctx);
 	}
 	
-	EC_POINTs_make_affine(pgroup, ncols, ppbase, vxcp->vxc_bnctx);
-	
 	for (i = 0; i < ncols; i++) {
 		if (EC_POINT_is_at_infinity(pgroup, ppbase[i])) {
 			printf("Infinity at %d\n", i);
-			break;
+			goto out;
 		}
 		int ret = EC_POINT_is_on_curve(pgroup, ppbase[i], vxcp->vxc_bnctx);
 		if (!ret) {
 			printf("Not on curve at %d: ret=%d\n", i, ret);
-			break;
+			goto out;
 		}
 	}
-
+	EC_POINTs_make_affine(pgroup, ncols, ppbase, vxcp->vxc_bnctx);
+	
 	/* Fill the sequential point array */
 	if (vcp->vc_verbose > 1) printf("\nCopy %d sequential points to the device", ncols);
 	for (i = 0; i < ncols; i++)
@@ -2064,6 +2061,8 @@ vg_opencl_loop(vg_exec_context_t *arg)
 
 		gettimeofday(&tv, NULL);
 		
+		vocp->voc_rekey_func(vocp);
+
 		if (!vg_ocl_kernel_start(vocp, 0, ncols, nrows, vocp->voc_ocl_invsize))
 			halt = 1;
 
@@ -2074,6 +2073,13 @@ vg_opencl_loop(vg_exec_context_t *arg)
 				     ppbase[i],
 				     poffset,
 				     vxcp->vxc_bnctx);
+		}
+
+		for (i = 0; i < ncols; i++) {
+			if (EC_POINT_is_at_infinity(pgroup, ppbase[i])) {
+				printf("Infinity at %d\n", i);
+				goto out;
+			}
 		}
 		EC_POINTs_make_affine(pgroup, ncols, ppbase, vxcp->vxc_bnctx);
         
@@ -2116,7 +2122,7 @@ vg_opencl_loop(vg_exec_context_t *arg)
 		}
 	}
 	}
-
+out:
 	if (halt) {
 		if (vcp->vc_verbose > 1) {
 			printf("Halting...");
