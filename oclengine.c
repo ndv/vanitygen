@@ -2003,8 +2003,6 @@ vg_opencl_loop(vg_exec_context_t *arg)
 	vg_set_privkey(&vxcp->vxc_bntmp2, pkey);
 	EC_POINT_copy(ppbase[0], EC_KEY_get0_public_key(pkey));
 
-	vocp->voc_rekey_func(vocp);
-
 	/* Build the base array of sequential points */
 	for (i = 1; i < ncols; i++) {
 		EC_POINT_add(pgroup,
@@ -2064,6 +2062,8 @@ vg_opencl_loop(vg_exec_context_t *arg)
 
 		gettimeofday(&tv, NULL);
 		
+		vocp->voc_rekey_func(vocp);
+
 		if (!vg_ocl_kernel_start(vocp, 0, ncols, nrows, vocp->voc_ocl_invsize))
 			halt = 1;
 
